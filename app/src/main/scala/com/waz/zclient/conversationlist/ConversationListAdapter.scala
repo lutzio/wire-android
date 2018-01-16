@@ -22,7 +22,7 @@ import android.view.View.OnLongClickListener
 import android.view.{View, ViewGroup}
 import com.waz.ZLog
 import com.waz.ZLog.ImplicitTag._
-import com.waz.ZLog.error
+import com.waz.ZLog.{error, verbose}
 import com.waz.api.IConversation
 import com.waz.model.ConversationData.ConversationType
 import com.waz.model._

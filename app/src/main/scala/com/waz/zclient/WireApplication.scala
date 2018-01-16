@@ -25,10 +25,10 @@ import com.waz.ZLog.verbose
 import com.waz.api._
 import com.waz.content.GlobalPreferences
 import com.waz.log.InternalLog
-import com.waz.model.ConversationData
+import com.waz.model.{AccountData, ConversationData}
 import com.waz.permissions.PermissionsService
+import com.waz.service._
 import com.waz.service.tracking.TrackingService
-import com.waz.service.{NetworkModeService, UiLifeCycle, ZMessaging}
 import com.waz.utils.events.{EventContext, Signal, Subscription}
 import com.waz.zclient.api.scala.ScalaStoreFactory
 import com.waz.zclient.appentry.controllers.{AppEntryController, InvitationsController, SignInController}
@@ -64,6 +64,7 @@ import com.waz.zclient.notifications.controllers.{CallingNotificationsController
 import com.waz.zclient.pages.main.conversation.controller.IConversationScreenController
 import com.waz.zclient.pages.main.conversationpager.controller.ISlidingPaneController
 import com.waz.zclient.pages.main.pickuser.controller.IPickUserController
+import com.waz.zclient.participants.OptionsMenuController
 import com.waz.zclient.preferences.PreferencesController
 import com.waz.zclient.tracking.{CallingTrackingController, CrashController, GlobalTrackingController, UiTrackingController}
 import com.waz.zclient.utils.{BackStackNavigator, BackendPicker, Callback, UiStorage}
@@ -80,14 +81,21 @@ object WireApplication {
     def controllerFactory = APP_INSTANCE.asInstanceOf[ZApplication].getControllerFactory
     def storeFactory = APP_INSTANCE.asInstanceOf[ZApplication].getStoreFactory
 
-    // SE services
-    bind [Signal[Option[ZMessaging]]]  to ZMessaging.currentUi.currentZms
+    bind [GlobalModule]    to ZMessaging.currentGlobal
+    bind [AccountsService] to ZMessaging.currentAccounts
+
+    bind [Signal[GlobalModule]]    to Signal.future(ZMessaging.globalModule)
+    bind [Signal[AccountsService]] to Signal.future(ZMessaging.accountsService)
+
+    bind [Signal[Option[AccountData]]] to inject[AccountsService].activeAccount
+    bind [Signal[Option[ZMessaging]]]  to inject[AccountsService].activeZms
     bind [Signal[ZMessaging]]          to inject[Signal[Option[ZMessaging]]].collect { case Some(z) => z }
-    bind [GlobalPreferences]           to ZMessaging.currentGlobal.prefs
-    bind [NetworkModeService]          to ZMessaging.currentGlobal.network
-    bind [UiLifeCycle]                 to ZMessaging.currentGlobal.lifecycle
-    bind [TrackingService]             to ZMessaging.currentGlobal.trackingService
-    bind [PermissionsService]          to ZMessaging.currentGlobal.permissions
+
+    bind [GlobalPreferences]           to inject[GlobalModule].prefs
+    bind [NetworkModeService]          to inject[GlobalModule].network
+    bind [UiLifeCycle]                 to inject[GlobalModule].lifecycle
+    bind [TrackingService]             to inject[GlobalModule].trackingService
+    bind [PermissionsService]          to inject[GlobalModule].permissions
 
     // old controllers
     // TODO: remove controller factory, reimplement those controllers
