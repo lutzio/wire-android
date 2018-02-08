@@ -594,7 +594,7 @@ class ConversationFragment extends BaseFragment[ConversationFragment.Container] 
   private def captureVideoAskPermissions() = for {
     _ <- inject[GlobalCameraController].releaseCamera() //release camera so the camera app can use it
     _ <- permissions.requestAllPermissions(Set(CAMERA, WRITE_EXTERNAL_STORAGE)).map {
-      case true => assetIntentsManager.foreach(_.captureVideo())
+      case true => assetIntentsManager.foreach(_.captureVideo(getContext.getApplicationContext))
       case false => //
     }(Threading.Ui)
   } yield {}

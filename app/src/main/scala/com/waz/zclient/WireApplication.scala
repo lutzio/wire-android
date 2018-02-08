@@ -17,6 +17,9 @@
  */
 package com.waz.zclient
 
+import java.util.Calendar
+
+import android.content.Context
 import android.os.Build
 import android.renderscript.RenderScript
 import android.support.multidex.MultiDexApplication
@@ -195,6 +198,19 @@ object WireApplication {
       */
     bind [UiTrackingController]    to new UiTrackingController()
   }
+
+  protected def clearOldVideoFiles(context: Context): Unit = {
+    val oneWeekAgo = Calendar.getInstance
+    oneWeekAgo.add(Calendar.DAY_OF_YEAR, -7)
+    Option(context.getExternalCacheDir).foreach { _.listFiles().foreach { file =>
+      val fileName = file.getName
+      val fileModified = Calendar.getInstance()
+      fileModified.setTimeInMillis(file.lastModified)
+      if (fileName.startsWith("VID_") && fileName.endsWith(".mp4") && fileModified.before(oneWeekAgo)) {
+        file.delete()
+      }
+    }}
+  }
 }
 
 class WireApplication extends MultiDexApplication with WireContext with Injectable {
@@ -245,6 +261,7 @@ class WireApplication extends MultiDexApplication with WireContext with Injectab
     inject[CallingTrackingController]
     inject[ThemeController]
     inject[PreferencesController]
+    clearOldVideoFiles(getApplicationContext)
   }
 
   override def onTerminate(): Unit = {

@@ -17,15 +17,14 @@
  */
 package com.waz.zclient.pages.main.conversation;
 
-import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.provider.MediaStore;
 import com.waz.utils.wrappers.AndroidURI;
 import com.waz.utils.wrappers.AndroidURIUtil;
@@ -87,16 +86,16 @@ public class AssetIntentsManager {
         openDocument("*/*", IntentType.FILE_SHARING);
     }
 
-    private void captureImage() {
+    private void captureImage(Context context) {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        pendingFileUri = getOutputMediaFileUri(IntentType.CAMERA);
+        pendingFileUri = getOutputMediaFileUri(context, IntentType.CAMERA);
         intent.putExtra(MediaStore.EXTRA_OUTPUT, AndroidURIUtil.unwrap(pendingFileUri));
         callback.openIntent(intent, IntentType.CAMERA);
     }
 
-    public void captureVideo() {
+    public void captureVideo(Context context) {
         Intent intent = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
-        pendingFileUri = getOutputMediaFileUri(IntentType.VIDEO);
+        pendingFileUri = getOutputMediaFileUri(context, IntentType.VIDEO);
         intent.putExtra(MediaStore.EXTRA_OUTPUT, AndroidURIUtil.unwrap(pendingFileUri));
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             intent.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 0);
@@ -164,8 +163,8 @@ public class AssetIntentsManager {
      *
      * @param type
      */
-    private static URI getOutputMediaFileUri(IntentType type) {
-        File file = getOutputMediaFile(type);
+    private static URI getOutputMediaFileUri(Context context, IntentType type) {
+        File file = getOutputMediaFile(context, type);
         return file != null ? AndroidURIUtil.fromFile(file) : null;
     }
 
@@ -174,9 +173,9 @@ public class AssetIntentsManager {
      *
      * @param type
      */
-    private static File getOutputMediaFile(IntentType type) {
-        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "WIRE_MEDIA");
-        if (!mediaStorageDir.exists() && !mediaStorageDir.mkdirs()) {
+    private static File getOutputMediaFile(Context context, IntentType type) {
+        File mediaStorageDir = context.getExternalCacheDir();
+        if (mediaStorageDir == null || !mediaStorageDir.exists()) {
             return null;
         }
 
