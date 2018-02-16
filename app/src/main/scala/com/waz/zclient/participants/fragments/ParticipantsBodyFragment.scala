@@ -43,7 +43,7 @@ import com.waz.zclient.pages.main.conversation.controller.IConversationScreenCon
 import com.waz.zclient.pages.main.pickuser.controller.IPickUserController
 import com.waz.zclient.participants.{ParticipantsChatheadAdapter, ParticipantsController}
 import com.waz.zclient.utils.ContextUtils._
-import com.waz.zclient.utils.{RichView, UiStorage, UserSignal, ViewUtils}
+import com.waz.zclient.utils.{RichView, ViewUtils}
 import com.waz.zclient.views.menus.{FooterMenu, FooterMenuCallback}
 import com.waz.zclient.{FragmentHelper, R}
 
@@ -66,18 +66,12 @@ class ParticipantsBodyFragment extends BaseFragment[ParticipantsBodyFragment.Con
     new FutureEventStream[UserId, Option[UserData]](adapter.onClick, participantsController.getUser).onUi {
       case Some(user) => (user.providerId, user.integrationId) match {
         case (Some(pId), Some(iId)) =>
-          // only team members can remove services from a conversation
-          implicit val uiStorage = inject[UiStorage]
           (for {
             z    <- zms.head
-            self <- UserSignal(z.selfUserId).head
             conv <- participantsController.conv.head
-            isCurrentUserGuest = conv.team.isDefined && conv.team != self.teamId
-          } yield (conv, isCurrentUserGuest)).map {
-            case (conv, false) =>
-              integrationDetailsController.setRemoving(conv.id, user.id)
-              convScreenController.showIntegrationDetails(pId, iId)
-            case _ =>
+          } yield conv).map { conv =>
+            integrationDetailsController.setRemoving(conv.id, user.id)
+            convScreenController.showIntegrationDetails(pId, iId)
           }
         case _ =>
           if (convScreenController.showUser(user.id))

@@ -23,7 +23,7 @@ import com.waz.model._
 import com.waz.service.ZMessaging
 import com.waz.utils.events.{EventContext, EventStream, Signal}
 import com.waz.zclient.conversation.ConversationController
-import com.waz.zclient.utils.{Callback, UiStorage}
+import com.waz.zclient.utils.{Callback, UiStorage, UserSignal}
 import com.waz.zclient.{Injectable, Injector}
 import com.waz.ZLog.ImplicitTag._
 import com.waz.threading.Threading
@@ -61,6 +61,13 @@ class ParticipantsController(implicit injector: Injector, context: Context, ec: 
     group      <- isGroup
     groupOrBot <- if (group) Signal.const(true) else isWithBot
   } yield groupOrBot
+
+  // is the current user a guest in the current conversation
+  def isCurrentUserGuest: Signal[Boolean] = for {
+    z           <- zms
+    currentUser <- UserSignal(z.selfUserId)
+    currentConv <- conv
+  } yield currentConv.team.isDefined && currentConv.team != currentUser.teamId
 
   def selectParticipant(userId: UserId): Unit =  selectedParticipant ! Some(userId)
 

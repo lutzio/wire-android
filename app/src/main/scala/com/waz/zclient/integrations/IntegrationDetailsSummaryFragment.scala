@@ -25,8 +25,10 @@ import android.widget.{FrameLayout, TextView}
 import com.waz.ZLog.ImplicitTag._
 import com.waz.service.tracking.TrackingService
 import com.waz.threading.Threading
+import com.waz.utils.events.Subscription
 import com.waz.utils.returning
 import com.waz.zclient.common.controllers.IntegrationsController
+import com.waz.zclient.participants.ParticipantsController
 import com.waz.zclient.ui.text.TypefaceTextView
 import com.waz.zclient.utils.ContextUtils.{getDrawable, showToast}
 import com.waz.zclient.utils.{RichView, ViewUtils}
@@ -37,10 +39,14 @@ import scala.concurrent.Future
 class IntegrationDetailsSummaryFragment extends Fragment with FragmentHelper {
 
   implicit private def ctx = getContext
+  import Threading.Implicits.Ui
 
   private lazy val integrationDetailsViewController = inject[IntegrationDetailsController]
-  private lazy val integrationsController = inject[IntegrationsController]
-  private lazy val tracking = inject[TrackingService]
+  private lazy val integrationsController           = inject[IntegrationsController]
+  private lazy val participantsController           = inject[ParticipantsController]
+  private lazy val tracking                         = inject[TrackingService]
+
+  private var subs = Set.empty[Subscription]
 
   private lazy val descriptionText = returning(view[TypefaceTextView](R.id.integration_description)) { summaryText =>
     integrationDetailsViewController.currentIntegration.map(_.description).onUi(d => summaryText.foreach(_.setText(d)))
@@ -66,40 +72,44 @@ class IntegrationDetailsSummaryFragment extends Fragment with FragmentHelper {
   }
 
   override def onViewCreated(view: View, savedInstanceState: Bundle): Unit = {
-    implicit val ec = Threading.Implicits.Ui
-
     val button     = findById[FrameLayout](R.id.add_remove_service_button)
     val buttonText = findById[TextView](R.id.button_text)
 
-    val removing = integrationDetailsViewController.removingFromConversation
-    button.setBackground(getDrawable(if (removing.nonEmpty) R.drawable.red_button else R.drawable.blue_button))
-    buttonText.setText(if (removing.nonEmpty) R.string.remove_service_button_text else R.string.add_service_button_text)
-    button.onClick {
-      removing match {
-        case Some((cId, uId)) =>
-          integrationsController.removeBot(cId, uId).flatMap {
-            case Left(e) =>
-              Future.successful(showToast(integrationsController.errorMessage(e)))
-            case Right(_) =>
-              getParentFragment.getFragmentManager.popBackStack()
-              integrationDetailsViewController.currentIntegrationId.head.map {
-                case (_, iId) => tracking.integrationRemoved(iId)
-              }
-          }
-        case _ =>
+    integrationDetailsViewController.removingFromConversation match {
+      case None =>
+        button.setBackground(getDrawable(R.drawable.blue_button))
+        buttonText.setText(R.string.add_service_button_text)
+        button.onClick {
           integrationDetailsViewController.onAddServiceClick ! {}
-      }
-    }
-
-    removing.foreach {
-      case (cId, _) => integrationsController.hasPermissionToRemoveBot(cId).map {
-        case true =>
-          button.setVisibility(View.VISIBLE)
-        case _ =>
-          button.setVisibility(View.GONE)
-      }
+        }
+      case Some((cId, uId)) =>
+        subs += participantsController.isCurrentUserGuest {
+          case true =>
+            button.setVisible(false)
+          case false =>
+            button.setBackground(getDrawable(R.drawable.red_button))
+            buttonText.setText(R.string.remove_service_button_text)
+            button.onClick {
+              integrationsController.removeBot(cId, uId).flatMap {
+                case Left(e) =>
+                  Future.successful(showToast(integrationsController.errorMessage(e)))
+                case Right(_) =>
+                  getParentFragment.getFragmentManager.popBackStack()
+                  integrationDetailsViewController.currentIntegrationId.head.map {
+                    case (_, iId) => tracking.integrationRemoved(iId)
+                  }
+              }
+            }
+        }
     }
 
     descriptionText
+  }
+
+  override def onDestroyView(): Unit = {
+    subs.foreach(_.destroy())
+    subs = Set.empty
+
+    super.onDestroyView()
   }
 }
