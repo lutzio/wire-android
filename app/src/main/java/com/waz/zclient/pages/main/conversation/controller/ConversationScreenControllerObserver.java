@@ -19,8 +19,6 @@ package com.waz.zclient.pages.main.conversation.controller;
 
 import android.view.View;
 import com.waz.api.Message;
-import com.waz.api.OtrClient;
-import com.waz.api.User;
 import com.waz.model.ConvId;
 import com.waz.model.IntegrationId;
 import com.waz.model.ProviderId;
@@ -41,8 +39,6 @@ public interface ConversationScreenControllerObserver {
     void onAddPeopleToConversation();
 
     void onShowConversationMenu(boolean inConvList, ConvId convId);
-
-    void onShowOtrClient(OtrClient otrClient, User user);
 
     void onShowCurrentOtrClient();
 

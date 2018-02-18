@@ -32,8 +32,7 @@ import com.waz.threading.Threading
 import com.waz.utils.events.Subscription
 import com.waz.utils.returning
 import com.waz.utils.wrappers.AndroidURIUtil
-import com.waz.zclient.common.controllers.{BrowserController, SoundController, ThemeController, UserAccountsController}
-import com.waz.zclient.controllers.confirmation.{ConfirmationRequest, IConfirmationController, TwoButtonConfirmationCallback}
+import com.waz.zclient.common.controllers.{BrowserController, UserAccountsController}
 import com.waz.zclient.controllers.navigation.{INavigationController, Page}
 import com.waz.zclient.controllers.singleimage.ISingleImageController
 import com.waz.zclient.conversation.ConversationController
@@ -58,8 +57,6 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
   with OnBackPressedListener
   with ParticipantHeaderFragment.Container
   with ParticipantsBodyFragment.Container
-  with TabbedParticipantBodyFragment.Container
-  with SingleParticipantFragment.Container
   with SendConnectRequestFragment.Container
   with BlockedUserProfileFragment.Container
   with PendingConnectRequestFragment.Container
@@ -79,6 +76,7 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
     _.foreach(_.setColor(getColorWithTheme(R.color.people_picker__loading__color, ctx)))
   }
 
+  private lazy val browserController      = inject[BrowserController]
   private lazy val convController         = inject[ConversationController]
   private lazy val userAccountsController = inject[UserAccountsController]
   private lazy val participantsController = inject[ParticipantsController]
@@ -200,11 +198,7 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
       verbose(s"onBackPressed with SingleOtrClientFragment")
       screenController.hideOtrClient()
       true
-    case Some(f: SingleParticipantFragment) if f.onBackPressed() =>
-      verbose(s"onBackPressed with SingleParticipantFragment")
-      true
     case Some(f: OptionsMenuFragment) if f.close() =>
-      verbose(s"onBackPressed with OptionsMenuFragment")
       true
     case _ if pickUserController.isShowingPickUser(getCurrentPickerDestination) =>
       verbose(s"onBackPressed with isShowingPickUser")
@@ -275,11 +269,7 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
   override def onShowUser(userId: UserId): Unit = participantsController.getUser(userId).foreach {
     case Some(user) if user.connection == User.ConnectionStatus.ACCEPTED || userAccountsController.isTeamAccount && userAccountsController.isTeamMember(userId)=>
       participantsController.selectParticipant(userId)
-      getStoreFactory.singleParticipantStore.setUser(getOldUserAPI(userId))
-      openUserProfileFragment(
-        SingleParticipantFragment.newInstance(false, IConnectStore.UserRequester.PARTICIPANTS),
-        SingleParticipantFragment.TAG
-      )
+      openUserProfileFragment(SingleParticipantFragment.newInstance(), SingleParticipantFragment.Tag)
       navigationController.setRightPage(Page.PARTICIPANT_USER_PROFILE, ParticipantFragment.TAG)
 
     case Some(user) if user.connection == PENDING_FROM_OTHER || user.connection == PENDING_FROM_USER || user.connection == IGNORED =>
@@ -305,8 +295,6 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
 
     case _ =>
   }
-
-  private def getOldUserAPI(userId: UserId): User = getStoreFactory.pickUserStore.getUser(userId.str)
 
   private def openUserProfileFragment(fragment: Fragment, tag: String) = {
     val transaction = getChildFragmentManager.beginTransaction
@@ -348,34 +336,8 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
     animateParticipantsWithConnectUserProfile(true)
   }
 
-  override def showRemoveConfirmation(userId: UserId): Unit = { // Show confirmation dialog before removing user
-    val callback = new TwoButtonConfirmationCallback() {
-      override def positiveButtonClicked(checkboxIsSelected: Boolean): Unit = {
-        dismissUserProfile()
-        convController.removeMember(userId)
-      }
-
-      override def negativeButtonClicked(): Unit = {}
-      override def onHideAnimationEnd(confirmed: Boolean, canceled: Boolean, checkboxIsSelected: Boolean): Unit = {}
-    }
-
-    participantsController.getUser(userId).foreach {
-      case Some(userData) =>
-        val request = new ConfirmationRequest.Builder()
-          .withHeader(getString(R.string.confirmation_menu__header))
-          .withMessage(getString(R.string.confirmation_menu_text_with_name, userData.getDisplayName))
-          .withPositiveButton(getString(R.string.confirmation_menu__confirm_remove))
-          .withNegativeButton(getString(R.string.confirmation_menu__cancel))
-          .withConfirmationCallback(callback)
-          .withWireTheme(inject[ThemeController].getThemeDependentOptionsTheme)
-          .build
-        getControllerFactory.getConfirmationController.requestConfirmation(request, IConfirmationController.PARTICIPANTS)
-        inject[SoundController].playAlert()
-      case _ =>
-    }
-  }
-
-  override def onOpenUrl(url: String): Unit = inject[BrowserController].openUrl(AndroidURIUtil.parse(url))
+  override def showRemoveConfirmation(userId: UserId): Unit =
+    participantsController.showRemoveConfirmation(userId)
 
   override def dismissUserProfile(): Unit = screenController.hideUser()
 
@@ -398,6 +360,9 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
   override def getLoadingViewIndicator: LoadingIndicatorView = loadingIndicatorView
 
   override def getCurrentPickerDestination = IPickUserController.Destination.PARTICIPANTS
+
+  override def onOpenUrl(url: String) =
+    browserController.openUrl(AndroidURIUtil.parse(url))
 
   override def onShowParticipants(anchorView: View, isSingleConversation: Boolean, isMemberOfConversation: Boolean, showDeviceTabIfSingle: Boolean): Unit = {}
 

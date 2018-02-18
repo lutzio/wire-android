@@ -127,11 +127,6 @@ public class StubConversationScreenController implements IConversationScreenCont
     }
 
     @Override
-    public void showOtrClient(OtrClient otrClient, User user) {
-
-    }
-
-    @Override
     public void tearDown() {
 
     }
