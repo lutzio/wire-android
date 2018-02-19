@@ -192,6 +192,8 @@ class ConversationManagerFragment extends BaseFragment[Container] with FragmentH
   }
 
   override def onHideParticipants(backOrCloseButtonPressed: Boolean, hideByConversationChange: Boolean, isSingleConversation: Boolean): Unit = {
+    import com.waz.ZLog.verbose
+    verbose(s"PF onHideParticipants")
     navigationController.setRightPage(Page.MESSAGE_STREAM, ConversationManagerFragment.Tag)
     getChildFragmentManager.popBackStack(ParticipantFragment.TAG, FragmentManager.POP_BACK_STACK_INCLUSIVE)
   }
@@ -318,10 +320,6 @@ class ConversationManagerFragment extends BaseFragment[Container] with FragmentH
   }
 
   override def onShowEditConversationName(show: Boolean): Unit = {}
-
-  override def onHeaderViewMeasured(participantHeaderHeight: Int): Unit = {}
-
-  override def onScrollParticipantsList(verticalOffset: Int, scrolledToBottom: Boolean): Unit = {}
 
   override def onHideUser(): Unit = {}
 

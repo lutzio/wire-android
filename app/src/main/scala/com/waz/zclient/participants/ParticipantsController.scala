@@ -62,7 +62,9 @@ class ParticipantsController(implicit injector: Injector, context: Context, ec: 
     groupOrBot <- if (group) Signal.const(true) else isWithBot
   } yield groupOrBot
 
-  def selectParticipant(userId: UserId): Unit =  selectedParticipant ! Some(userId)
+  def selectParticipant(userId: UserId): Unit = selectedParticipant ! Some(userId)
+
+  def unselectParticipant(): Unit = selectedParticipant ! None
 
   def getUser(userId: UserId): Future[Option[UserData]] = zms.head.flatMap(_.users.getUser(userId))
 

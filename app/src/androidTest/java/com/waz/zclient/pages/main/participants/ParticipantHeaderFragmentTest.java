@@ -24,6 +24,7 @@ import com.waz.api.Verification;
 import com.waz.zclient.MainTestActivity;
 import com.waz.zclient.R;
 import com.waz.zclient.core.stores.connect.IConnectStore;
+import com.waz.zclient.participants.fragments.ParticipantsHeaderFragment;
 import com.waz.zclient.testutils.FragmentTest;
 import com.waz.zclient.testutils.MockHelper;
 import org.junit.Test;
@@ -55,7 +56,7 @@ public class ParticipantHeaderFragmentTest extends FragmentTest<MainTestActivity
 
         MockHelper.setupParticipantsMocks(mockConversation, activity);
 
-        attachFragment(ParticipantHeaderFragment.newInstance(IConnectStore.UserRequester.CONVERSATION), ParticipantHeaderFragment.TAG);
+        attachFragment(ParticipantsHeaderFragment.newInstance(), ParticipantsHeaderFragment.TAG());
 
         Thread.sleep(400);
 
@@ -75,7 +76,7 @@ public class ParticipantHeaderFragmentTest extends FragmentTest<MainTestActivity
 
         MockHelper.setupParticipantsMocks(mockConversation, activity);
 
-        attachFragment(ParticipantHeaderFragment.newInstance(IConnectStore.UserRequester.CONVERSATION), ParticipantHeaderFragment.TAG);
+        attachFragment(ParticipantsHeaderFragment.newInstance(), ParticipantsHeaderFragment.TAG());
 
         Thread.sleep(400);
 
@@ -92,7 +93,7 @@ public class ParticipantHeaderFragmentTest extends FragmentTest<MainTestActivity
 
         MockHelper.setupParticipantsMocks(mockConversation, activity);
 
-        attachFragment(ParticipantHeaderFragment.newInstance(IConnectStore.UserRequester.CONVERSATION), ParticipantHeaderFragment.TAG);
+        attachFragment(ParticipantsHeaderFragment.newInstance(), ParticipantsHeaderFragment.TAG());
 
         onView(withId(R.id.gtv__participants_header__pen_icon)).check(isVisible());
         onView(withId(R.id.gtv__participants_header__pen_icon)).perform(click());
@@ -111,7 +112,7 @@ public class ParticipantHeaderFragmentTest extends FragmentTest<MainTestActivity
 
         MockHelper.setupParticipantsMocks(mockConversation, activity);
 
-        attachFragment(ParticipantHeaderFragment.newInstance(IConnectStore.UserRequester.CONVERSATION), ParticipantHeaderFragment.TAG);
+        attachFragment(ParticipantsHeaderFragment.newInstance(), ParticipantsHeaderFragment.TAG());
 
         Thread.sleep(400);
 

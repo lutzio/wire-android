@@ -1,80 +1,224 @@
+/**
+ * Wire
+ * Copyright (C) 2018 Wire Swiss GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package com.waz.zclient.participants.fragments
 
 import android.content.Context
 import android.os.Bundle
-import android.os.Handler
 import android.support.v4.app.Fragment
 import android.support.v7.widget.Toolbar
 import android.util.TypedValue
-import android.view.KeyEvent
-import android.view.LayoutInflater
-import android.view.MotionEvent
-import android.view.View
-import android.view.ViewGroup
-import android.view.animation.AlphaAnimation
-import android.view.animation.Animation
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
+import android.view._
+import android.view.animation.{AlphaAnimation, Animation}
+import android.view.inputmethod.{EditorInfo, InputMethodManager}
 import android.widget.TextView
-import com.waz.api.IConversation
-import com.waz.api.Message
-import com.waz.api.NetworkMode
-import com.waz.api.OtrClient
-import com.waz.api.User
-import com.waz.api.UsersList
-import com.waz.api.Verification
-import com.waz.model.ConvId
-import com.waz.model.ConversationData
-import com.waz.model.IntegrationId
-import com.waz.model.ProviderId
+import com.waz.ZLog.ImplicitTag._
+import com.waz.ZLog.verbose
+import com.waz.api.{NetworkMode, Verification}
 import com.waz.model.UserData
-import com.waz.model.UserId
+import com.waz.service.ZMessaging
+import com.waz.utils.events.{EventStream, Signal, Subscription}
 import com.waz.utils.returning
-import com.waz.zclient.{BaseActivity, FragmentHelper, R}
 import com.waz.zclient.common.controllers.ThemeController
+import com.waz.zclient.common.controllers.global.AccentColorController
 import com.waz.zclient.common.views.UserDetailsView
-import com.waz.zclient.controllers.accentcolor.AccentColorObserver
-import com.waz.zclient.controllers.currentfocus.IFocusController
-import com.waz.zclient.controllers.globallayout.KeyboardVisibilityObserver
 import com.waz.zclient.conversation.ConversationController
-import com.waz.zclient.core.stores.connect.ConnectStoreObserver
-import com.waz.zclient.core.stores.connect.IConnectStore
-import com.waz.zclient.core.stores.network.NetworkAction
-import com.waz.zclient.core.stores.participants.ParticipantsStoreObserver
 import com.waz.zclient.pages.BaseFragment
-import com.waz.zclient.pages.main.conversation.controller.ConversationScreenControllerObserver
 import com.waz.zclient.participants.ParticipantsController
 import com.waz.zclient.ui.text.AccentColorEditText
 import com.waz.zclient.ui.utils.KeyboardUtils
-import com.waz.zclient.ui.utils.MathUtils
-import com.waz.zclient.utils.Callback
-import com.waz.zclient.utils.LayoutSpec
-import com.waz.zclient.utils.ViewUtils
+import com.waz.zclient.utils.{RichView, ViewUtils}
 import com.waz.zclient.views.e2ee.ShieldView
-import com.waz.zclient.utils.ContextUtils._
+import com.waz.zclient.{FragmentHelper, R}
 
-class ParticipantsHeaderFragment extends BaseFragment[ParticipantsHeaderFragment.Container]
-  with FragmentHelper
-  with KeyboardVisibilityObserver
-  with ParticipantsStoreObserver
-  with View.OnClickListener
-  with ConversationScreenControllerObserver
-  with ConnectStoreObserver
-  with AccentColorObserver {
+class ParticipantsHeaderFragment extends BaseFragment[ParticipantsHeaderFragment.Container] with FragmentHelper {
+
+  import com.waz.threading.Threading.Implicits.Ui
 
   private lazy val toolbar = view[Toolbar](R.id.t__participants__toolbar)
 
-  private var membersCountTextView: TextView = null
-  private var userDetailsView: UserDetailsView = null
-  private var headerEditText: AccentColorEditText = null
-  private var headerReadOnlyTextView: TextView = null
-  private var bottomBorder: View = null
-  private var penIcon: TextView = null
-  private var shieldView: ShieldView = null
-  private var userRequester: IConnectStore.UserRequester = null
+  private lazy val membersCountTextView = returning(view[TextView](R.id.ttv__participants__sub_header)) { view =>
+    participantsController.otherParticipants.map(_.size) { participants =>
+      view.foreach { mc =>
+        verbose(s"PF members counter, other participants set to $participants")
+        mc.setText(getResources.getQuantityString(R.plurals.participants__sub_header_xx_people, participants, participants.asInstanceOf[java.lang.Integer]))
+        mc.setTextSize(TypedValue.COMPLEX_UNIT_PX, getResources.getDimension(R.dimen.wire__text_size__small))
+      }
+    }
 
-  private val convController = inject[ConversationController]
-  private val participantsController = inject[ParticipantsController]
+    (for {
+      isSingleParticipant <- participantsController.otherParticipant.map(_.isDefined)
+      edit <- editInProgress
+    } yield !isSingleParticipant && !edit){ isVisible =>
+      verbose(s"PF members counter, setting visibility to $isVisible")
+      view.foreach(_.setVisible(isVisible))
+    }
+  }
+
+  private lazy val userDetailsView = returning(view[UserDetailsView](R.id.udv__participants__user_details)) { view =>
+    participantsController.otherParticipant.collect { case Some(userId) => userId } { userId =>
+      verbose(s"PF user details, setting a single userId: $userId")
+      view.foreach(_.setUserId(userId))
+    }
+
+    (for {
+      isSingleParticipant <- participantsController.otherParticipant.map(_.isDefined)
+      edit <- editInProgress
+    } yield isSingleParticipant && !edit){ isVisible =>
+      verbose(s"PF user details, setting visibility to $isVisible")
+      view.foreach(_.setVisible(isVisible))
+    }
+  }
+
+  private lazy val headerEditText = returning(view[AccentColorEditText](R.id.taet__participants__header__editable)) { view =>
+    (for {
+      true        <- themeController.darkThemeSet
+      accentColor <- accentColorController.accentColor
+    } yield accentColor) { color =>
+      verbose(s"PF header edit, color: $color")
+      view.foreach(_.setAccentColor(color.getColor))
+    }
+
+    editInProgress {
+      case true => view.foreach { he =>
+        he.requestFocus()
+        he.setVisible(true)
+        headerReadOnlyTextView.foreach { hr =>
+          verbose(s"PF header edit  (true), setting the text to ${hr.getText}")
+          he.setText(hr.getText)
+          he.setSelection(hr.getText.length)
+        }
+      }
+      case false => view.foreach { he =>
+        verbose(s"PF header edit (false)")
+        he.clearFocus()
+        he.requestLayout()
+        he.setVisible(false)
+      }
+    }
+  }
+
+  private lazy val headerReadOnlyTextView = returning(view[TextView](R.id.ttv__participants__header)) { view =>
+    (for {
+      convName <- convController.currentConv.map(_.displayName)
+      _ = verbose(s"PF conv name: $convName")
+      userId   <- participantsController.otherParticipant
+      _ = verbose(s"PF userId: $userId")
+      user     <- userId.fold(Signal.const(Option.empty[UserData]))(id => Signal.future(participantsController.getUser(id)))
+      _ = verbose(s"PF user name: ${user.map(_.name)}")
+    } yield user.fold(convName)(_.name)) { name =>
+      view.foreach(_.setText(name))
+    }
+
+    editInProgress { edit =>
+      verbose(s"PF header readonly set visible: ${!edit}")
+      view.foreach(_.setVisible(!edit))
+    }
+  }
+
+  private lazy val penIcon = returning(view[TextView](R.id.gtv__participants_header__pen_icon)) { view =>
+    editAllowed.onUi { edit =>
+      verbose(s"PF pen icon, visible if not a singleParticipant and not edit: $edit")
+      view.foreach { pi => pi.setVisible(edit) }
+    }
+  }
+
+  private lazy val shieldView = returning(view[ShieldView](R.id.sv__otr__verified_shield)) { view =>
+    (for {
+      isGroupOrBot <- participantsController.isGroupOrBot
+      user         <- if (isGroupOrBot) Signal.const(Option.empty[UserData])
+      else participantsController.otherParticipant.flatMap {
+        case Some(userId) => Signal.future(participantsController.getUser(userId))
+        case None         => Signal.const(Option.empty[UserData])
+      }
+    } yield user.fold(false)(_.verified == Verification.VERIFIED)) { isVerified =>
+      verbose(s"PF shield view: $isVerified")
+      view.foreach(_.setVisible(isVerified))
+    }
+  }
+
+  private lazy val convController         = inject[ConversationController]
+  private lazy val participantsController = inject[ParticipantsController]
+  private lazy val themeController        = inject[ThemeController]
+  private lazy val accentColorController  = inject[AccentColorController]
+
+  private lazy val internetAvailable = for {
+    z           <- inject[Signal[ZMessaging]]
+    networkMode <- z.network.networkMode
+  } yield networkMode != NetworkMode.OFFLINE && networkMode != NetworkMode.UNKNOWN
+
+  val onNavigationClicked = EventStream[Unit]()
+  val editInProgress = Signal(false)
+
+  private lazy val editAllowed = for {
+    isSingleParticipant <- participantsController.otherParticipant.map(_.isDefined)
+    _ = verbose(s"PF isSingleParticipant = $isSingleParticipant")
+    edit                <- editInProgress
+  } yield !isSingleParticipant && !edit
+
+  private val editorActionListener: TextView.OnEditorActionListener = new TextView.OnEditorActionListener() {
+    override def onEditorAction(textView: TextView, actionId: Int, event: KeyEvent): Boolean =
+      if (actionId == EditorInfo.IME_ACTION_DONE || (event != null && event.getKeyCode == KeyEvent.KEYCODE_ENTER)) {
+        verbose(s"PF conversation rename event")
+        internetAvailable.head.foreach {
+          case true => headerEditText.foreach { he =>
+            val text = he.getText.toString.trim
+            convController.setCurrentConvName(text)
+            headerReadOnlyTextView.foreach(_.setText(text))
+            verbose(s"PF conversation renamed")
+          }
+          case false => convController.currentConv.map(_.displayName).head.foreach { name =>
+            headerReadOnlyTextView.foreach(_.setText(name))
+          }
+          showOfflineRenameError()
+        }
+
+        headerEditText.foreach { he =>
+          he.clearFocus()
+          getActivity
+            .getSystemService(Context.INPUT_METHOD_SERVICE).asInstanceOf[InputMethodManager]
+            .hideSoftInputFromWindow(he.getWindowToken, 0)
+        }
+
+        editInProgress ! false
+        true
+      } else false
+  }
+
+  private def triggerEditingOfConversationNameIfInternet(): Unit = (for {
+    edit     <- editAllowed.head
+    internet <- internetAvailable.head
+  } yield (edit, internet)).foreach {
+    case (true, false) => showOfflineRenameError()
+    case (true, true)  => editInProgress ! true
+    case _ =>
+  }
+
+  private def showOfflineRenameError(): Unit =
+    ViewUtils.showAlertDialog(
+      getActivity,
+      R.string.alert_dialog__no_network__header,
+      R.string.rename_conversation__no_network__message,
+      R.string.alert_dialog__confirmation,
+      null,
+      true
+    )
+
+  private var subs = Set.empty[Subscription]
 
   // This is a workaround for the bug where child fragments disappear when
   // the parent is removed (as all children are first removed from the parent)
@@ -87,419 +231,63 @@ class ParticipantsHeaderFragment extends BaseFragment[ParticipantsHeaderFragment
     case _ => super.onCreateAnimation(transit, enter, nextAnim)
   }
 
-  override def onCreate(savedInstanceState: Bundle): Unit = {
-    super.onCreate(savedInstanceState)
-    userRequester = getArguments.getSerializable(ParticipantsHeaderFragment.ARG_USER_REQUESTER).asInstanceOf[IConnectStore.UserRequester]
-  }
-
   override def onCreateView(inflater: LayoutInflater, container: ViewGroup, savedInstanceState: Bundle): View = {
-    val rootView: View = inflater.inflate(R.layout.fragment_participants_header, container, false)
-    toolbar = ViewUtils.getView(rootView, R.id.t__participants__toolbar)
-    membersCountTextView = ViewUtils.getView(rootView, R.id.ttv__participants__sub_header)
-    userDetailsView = ViewUtils.getView(rootView, R.id.udv__participants__user_details)
-    headerReadOnlyTextView = ViewUtils.getView(rootView, R.id.ttv__participants__header)
-    headerEditText = ViewUtils.getView(rootView, R.id.taet__participants__header__editable)
-    bottomBorder = ViewUtils.getView(rootView, R.id.v_participants__header__bottom_border)
-    shieldView = ViewUtils.getView(rootView, R.id.sv__otr__verified_shield)
-    penIcon = ViewUtils.getView(rootView, R.id.gtv__participants_header__pen_icon)
-    headerEditText.setOnTouchListener(headerOnTouchListener)
-    headerEditText.setOnEditorActionListener(editorActionListener)
-
-      toolbar.setNavigationOnClickListener(new View.OnClickListener() {
-        override def onClick(v: View): Unit = {
-          if (userRequester == IConnectStore.UserRequester.POPOVER) {
-            getContainer.dismissDialog()
-          }
-          else {
-            getControllerFactory.getConversationScreenController.hideParticipants(true, false)
-          }
-        }
-      })
-
-    rootView
+    inflater.inflate(R.layout.fragment_participants_header, container, false)
   }
 
-  override def onStart(): Unit = {
-    super.onStart()
-    if (userRequester eq IConnectStore.UserRequester.POPOVER) {
-      getStoreFactory.connectStore.addConnectRequestObserver(this)
-      val user: User = getStoreFactory.singleParticipantStore.getUser
-      getStoreFactory.connectStore.loadUser(user.getId, userRequester)
+  override def onViewCreated(view: View, savedInstanceState: Bundle): Unit = {
+    super.onViewCreated(view, savedInstanceState)
+
+    toolbar.foreach(_.setNavigationOnClickListener(new View.OnClickListener() {
+      override def onClick(v: View): Unit = onNavigationClicked ! Unit
+    }))
+
+    membersCountTextView
+    userDetailsView
+
+    headerEditText.foreach { _.setOnEditorActionListener(editorActionListener) }
+
+    headerReadOnlyTextView.foreach(_.onClick {
+      verbose(s"PF read only on click")
+      triggerEditingOfConversationNameIfInternet()
+    })
+
+    penIcon.foreach(_.onClick {
+      verbose(s"PF pen icon on click")
+      triggerEditingOfConversationNameIfInternet()
+    })
+
+    shieldView
+
+    subs += onNavigationClicked { _ =>
+      verbose(s"PF navigation clicked")
+      getControllerFactory.getConversationScreenController.hideParticipants(true, false)
     }
-    else {
-      getStoreFactory.participantsStore.addParticipantsStoreObserver(this)
+
+    subs += editInProgress {
+      case true =>
+        getControllerFactory.getConversationScreenController.editConversationName(true)
+        KeyboardUtils.showKeyboard(getActivity)
+      case false =>
+        getControllerFactory.getConversationScreenController.editConversationName(false)
     }
-    getControllerFactory.getConversationScreenController.addConversationControllerObservers(this)
-    getControllerFactory.getAccentColorController.addAccentColorObserver(this)
-    if (!((getActivity.asInstanceOf[BaseActivity]).injectJava(classOf[ThemeController]).isDarkTheme)) {
-      headerEditText.setAccentColor(getControllerFactory.getAccentColorController.getColor)
-    }
-    updateWithCurrentConv()
-  }
 
-  override def onResume(): Unit = {
-    super.onResume()
-    headerEditText.clearFocus()
-    getControllerFactory.getGlobalLayoutController.addKeyboardVisibilityObserver(this)
-    penIcon.setOnClickListener(this)
-  }
-
-  override def onPause(): Unit = {
-    getControllerFactory.getGlobalLayoutController.removeKeyboardVisibilityObserver(this)
-    KeyboardUtils.hideKeyboard(getActivity)
-    penIcon.setOnClickListener(null)
-    super.onPause()
-  }
-
-  override def onStop(): Unit = {
-    getControllerFactory.getAccentColorController.removeAccentColorObserver(this)
-    getStoreFactory.connectStore.removeConnectRequestObserver(this)
-    getControllerFactory.getConversationScreenController.removeConversationControllerObservers(this)
-    getStoreFactory.participantsStore.removeParticipantsStoreObserver(this)
-    super.onStop()
   }
 
   override def onDestroyView(): Unit = {
-    membersCountTextView = null
-    userDetailsView = null
-    headerReadOnlyTextView = null
-    headerEditText = null
-    bottomBorder = null
-    penIcon = null
-    shieldView = null
+    subs.foreach(_.destroy())
+    subs = Set.empty
+
     super.onDestroyView()
   }
 
-  override def onClick(v: View): Unit = {
-    v.getId match {
-      case R.id.gtv__participants_header__pen_icon =>
-        triggerEditingOfConversationNameIfInternet()
-        break //todo: break is not supported
-    }
-  }
-
-  override def conversationUpdated(conversation: IConversation): Unit = {
-    if (conversation == null) {
-      return
-    }
-    updateWithCurrentConv()
-  }
-
-  private def updateWithCurrentConv(): Unit = {
-    convController.withCurrentConv(new Callback[ConversationData]() {
-      override def callback(conv: ConversationData): Unit = {
-        participantsController.withCurrentConvGroupOrBot(new Callback[Boolean]() {
-          override def callback(groupOrBot: Boolean): Unit = {
-            headerReadOnlyTextView.setText(conv.displayName)
-            if (groupOrBot) {
-              membersCountTextView.setVisibility(View.VISIBLE)
-              userDetailsView.setVisibility(View.GONE)
-              if (conv.isActive) {
-                headerEditText.setText(conv.displayName)
-                headerEditText.setVisibility(View.VISIBLE)
-              }
-              else {
-                headerEditText.setVisibility(View.GONE)
-              }
-              shieldView.setVisibility(View.GONE)
-              penIcon.setVisibility(View.VISIBLE)
-            }
-            else {
-              membersCountTextView.setVisibility(View.GONE)
-              userDetailsView.setVisibility(View.VISIBLE)
-              headerEditText.setVisibility(View.GONE)
-              penIcon.setVisibility(View.GONE)
-              participantsController.withOtherParticipant(new Callback[UserData]() {
-                override def callback(userData: UserData): Unit = {
-                  shieldView.setVisibility(if ((userData.verified eq Verification.VERIFIED)) {
-                    View.VISIBLE
-                  }
-                  else {
-                    View.GONE
-                  })
-                  userDetailsView.setUserId(userData.id)
-                }
-              })
-            }
-          }
-        })
-      }
-    })
-  }
-
-  override def participantsUpdated(participants: UsersList): Unit = {
-    membersCountTextView.setText(getResources.getQuantityString(R.plurals.participants__sub_header_xx_people, participants.size, participants.size))
-    membersCountTextView.setTextSize(TypedValue.COMPLEX_UNIT_PX, getResources.getDimension(R.dimen.wire__text_size__small))
-    membersCountTextView.setOnClickListener(null)
-    // Hide header bottom border
-    bottomBorder.setVisibility(View.GONE)
-    new Handler().post(new Runnable() {
-      override def run(): Unit = {
-        if (getView != null && getContainer != null) {
-          val height: Int = getView.getMeasuredHeight
-          getControllerFactory.getConversationScreenController.setParticipantHeaderHeight(height)
-        }
-      }
-    })
-  }
-
-  override def otherUserUpdated(otherUser: User): Unit = {
-    setParticipant(otherUser)
-  }
-
-  private val headerOnTouchListener: View.OnTouchListener = new View.OnTouchListener() {
-    private var downAction: Boolean = false
-    override
-
-    def onTouch(v: View, event: MotionEvent): Boolean = {
-      if (event.getAction == MotionEvent.ACTION_UP && downAction) {
-        triggerEditingOfConversationNameIfInternet()
-        downAction = false
-      }
-      else {
-        if (event.getAction == MotionEvent.ACTION_DOWN) {
-          downAction = true
-        }
-      }
-      // consume touch event if there is no network.
-      return !(getStoreFactory.networkStore.hasInternetConnection)
-    }
-  }
-
-  private def triggerEditingOfConversationNameIfInternet(): Unit = {
-    if (getStoreFactory == null || getStoreFactory.isTornDown) {
-      return
-    }
-    if (MathUtils.floatEqual(headerEditText.getAlpha, 0f)) { // only if not already visible and network is available
-      getStoreFactory.networkStore.doIfHasInternetOrNotifyUser(new NetworkAction() {
-        override def execute(networkMode: NetworkMode): Unit = {
-          toggleEditModeForConversationName(true)
-        }
-
-        override
-
-        def onNoNetwork(): Unit = {
-          showOfflineRenameError()
-        }
-      })
-    }
-  }
-
-  private def showOfflineRenameError(): Unit = {
-    ViewUtils.showAlertDialog(getActivity, R.string.alert_dialog__no_network__header, R.string.rename_conversation__no_network__message, R.string.alert_dialog__confirmation, null, true)
-  }
-
-  private val editorActionListener: TextView.OnEditorActionListener = new TextView.OnEditorActionListener() {
-    override def onEditorAction(textView: TextView, actionId: Int, event: KeyEvent): Boolean = {
-      if (actionId == EditorInfo.IME_ACTION_DONE || (event != null && event.getKeyCode == KeyEvent.KEYCODE_ENTER)) {
-        if (LayoutSpec.isPhone(getActivity)) {
-          renameConversation()
-        }
-        closeHeaderEditing()
-        return true
-      }
-      return false
-    }
-
-    private
-
-    def closeHeaderEditing(): Unit = {
-      headerEditText.clearFocus()
-      val height: Int = getView.getMeasuredHeight
-      new Handler().post(new Runnable() {
-        override def run(): Unit = {
-          getControllerFactory.getConversationScreenController.setParticipantHeaderHeight(height)
-        }
-      })
-      val imm: InputMethodManager = getActivity.getSystemService(Context.INPUT_METHOD_SERVICE).asInstanceOf[InputMethodManager]
-      imm.hideSoftInputFromWindow(headerEditText.getWindowToken, 0)
-    }
-  }
-
-  private def resetName(): Unit = {
-    convController.withCurrentConvName(new Callback[String]() {
-      override def callback(convName: String): Unit = {
-        headerReadOnlyTextView.setText(convName)
-      }
-    })
-  }
-
-  private def renameConversation(): Unit = {
-    getStoreFactory.networkStore.doIfHasInternetOrNotifyUser(new NetworkAction() {
-      override def execute(networkMode: NetworkMode): Unit = {
-        updateConversationName()
-      }
-
-      override
-
-      def onNoNetwork(): Unit = {
-        resetName()
-        showOfflineRenameError()
-      }
-    })
-  }
-
-  private def updateConversationName(): Unit = {
-    if (headerEditText == null) {
-      return
-    }
-    val text: String = headerEditText.getText.toString.trim
-    convController.setCurrentConvName(text)
-    headerReadOnlyTextView.setText(text)
-  }
-
-  override def onShowParticipants(anchorView: View, isSingleConversation: Boolean, isMemberOfConversation: Boolean, showDeviceTabIfSingle: Boolean): Unit = {
-    if (!(isSingleConversation) && isMemberOfConversation) {
-      penIcon.setVisibility(View.VISIBLE)
-    }
-    else {
-      penIcon.setVisibility(View.GONE)
-    }
-  }
-
-  override def onHideParticipants(orButtonPressed: Boolean, hideByConversationChange: Boolean, backOrButtonPressed: Boolean): Unit = {
-    if (LayoutSpec.isTablet(getActivity) && !(hideByConversationChange)) {
-      renameConversation()
-    }
-  }
-
-  override def onShowEditConversationName(edit: Boolean): Unit = {
-    // do nothing
-  }
-
-  override def onHeaderViewMeasured(participantHeaderHeight: Int): Unit = {
-  }
-
-  override def onScrollParticipantsList(verticalOffset: Int, scrolledToBottom: Boolean): Unit = {
-    if (bottomBorder == null) {
-      return
-    }
-    if (verticalOffset > 0) {
-      bottomBorder.setVisibility(View.VISIBLE)
-    }
-    else {
-      bottomBorder.setVisibility(View.GONE)
-    }
-  }
-
-  override def onShowUser(userId: UserId): Unit = {
-  }
-
-  override def onHideUser(): Unit = {
-  }
-
-  override def onAddPeopleToConversation(): Unit = {
-  }
-
-  override def onShowConversationMenu(inConvList: Boolean, convId: ConvId): Unit = {
-  }
-
-  override def onShowOtrClient(otrClient: OtrClient, user: User): Unit = {
-  }
-
-  override def onShowCurrentOtrClient(): Unit = {
-  }
-
-  override def onHideOtrClient(): Unit = {
-  }
-
-  override def onShowLikesList(message: Message): Unit = {
-  }
-
-  override def onShowIntegrationDetails(providerId: ProviderId, integrationId: IntegrationId): Unit = {
-  }
-
-  override def onKeyboardVisibilityChanged(keyboardIsVisible: Boolean, keyboardHeight: Int, currentFocus: View): Unit = {
-    if (!(keyboardIsVisible)) {
-      toggleEditModeForConversationName(false)
-    }
-  }
-
-  override def onConnectUserUpdated(user: User, usertype: IConnectStore.UserRequester): Unit = {
-    if (usertype ne userRequester) {
-      return
-    }
-    setParticipant(user)
-  }
-
-  private def setParticipant(user: User): Unit = {
-    headerReadOnlyTextView.setText(user.getName)
-    userDetailsView.setUser(user)
-    headerEditText.setVisibility(View.GONE)
-    new Handler().post(new Runnable() {
-      override def run(): Unit = {
-        if (getView != null && getControllerFactory.getConversationScreenController != null) {
-          val height: Int = getView.getMeasuredHeight
-          getControllerFactory.getConversationScreenController.setParticipantHeaderHeight(height)
-        }
-      }
-    })
-  }
-
-  override def onInviteRequestSent(conversation: IConversation): Unit = {
-  }
-
-  override def onAccentColorHasChanged(sender: Any, color: Int): Unit = {
-    participantsController.withCurrentConvGroupOrBot(new Callback[Boolean]() {
-      override def callback(groupOrBot: Boolean): Unit = {
-        if (!(groupOrBot) && !(inject(classOf[ThemeController]).isDarkTheme)) {
-          headerEditText.setAccentColor(color)
-        }
-      }
-    })
-  }
-
-  private def toggleEditModeForConversationName(edit: Boolean): Unit = {
-    participantsController.withCurrentConvGroupOrBot(new Callback[Boolean]() {
-      override def callback(groupOrBot: Boolean): Unit = {
-        if (groupOrBot) {
-          getControllerFactory.getConversationScreenController.editConversationName(edit)
-          if (edit) {
-            headerEditText.setText(headerReadOnlyTextView.getText)
-            headerEditText.setAlpha(1)
-            headerEditText.requestFocus
-            getControllerFactory.getFocusController.setFocus(IFocusController.CONVERSATION_EDIT_NAME)
-            headerEditText.setSelection(headerEditText.getText.length)
-            KeyboardUtils.showKeyboard(getActivity)
-            headerReadOnlyTextView.setAlpha(0)
-            membersCountTextView.setAlpha(0)
-            penIcon.setVisibility(View.GONE)
-          }
-          else {
-            headerEditText.setAlpha(0)
-            headerEditText.requestLayout()
-            headerReadOnlyTextView.setAlpha(1)
-            headerEditText.clearFocus()
-            membersCountTextView.setAlpha(1)
-            penIcon.setVisibility(View.VISIBLE)
-            if (LayoutSpec.isTablet(getActivity)) {
-              renameConversation()
-            }
-          }
-        }
-      }
-    })
-  }
 }
 
 object ParticipantsHeaderFragment {
   val TAG: String = classOf[ParticipantsHeaderFragment].getName
-  private val ARG_USER_REQUESTER: String = "ARG_USER_REQUESTER"
 
-  def newInstance(userRequester: IConnectStore.UserRequester): ParticipantsHeaderFragment =
-    returning(new ParticipantsHeaderFragment) {
-      _.setArguments(returning(new Bundle) {
-        _.putSerializable(ARG_USER_REQUESTER, userRequester)
-      })
-    }
+  def newInstance: ParticipantsHeaderFragment = new ParticipantsHeaderFragment
 
-  //////////////////////////////////////////////////////////////////////////////////////////
-  //
-  //  Conversation Manager Notifications
-  //
-  //////////////////////////////////////////////////////////////////////////////////////////
   trait Container {
-    def dismissDialog(): Unit
   }
-
 }

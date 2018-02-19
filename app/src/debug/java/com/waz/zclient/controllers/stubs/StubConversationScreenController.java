@@ -46,11 +46,6 @@ public class StubConversationScreenController implements IConversationScreenCont
     }
 
     @Override
-    public void setParticipantHeaderHeight(int participantHeaderHeight) {
-
-    }
-
-    @Override
     public void addPeopleToConversation() {
 
     }
@@ -103,11 +98,6 @@ public class StubConversationScreenController implements IConversationScreenCont
     @Override
     public void addConversationControllerObservers(ConversationScreenControllerObserver conversationScreenControllerObserver) {
 
-    }
-
-    @Override
-    public User getRequestedDeviceTabUser() {
-        return null;
     }
 
 

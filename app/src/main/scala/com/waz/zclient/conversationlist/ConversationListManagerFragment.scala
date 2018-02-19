@@ -453,10 +453,6 @@ class ConversationListManagerFragment extends Fragment
 
   override def onShowEditConversationName(show: Boolean) = {}
 
-  override def onHeaderViewMeasured(participantHeaderHeight: Int) = {}
-
-  override def onScrollParticipantsList(verticalOffset: Int, scrolledToBottom: Boolean) = {}
-
   override def onShowUser(userId: UserId): Unit = {}
 
   override def onHideUser() = {}

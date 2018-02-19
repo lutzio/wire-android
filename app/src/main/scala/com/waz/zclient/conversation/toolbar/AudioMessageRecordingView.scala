@@ -109,7 +109,7 @@ class AudioMessageRecordingView (val context: Context, val attrs: AttributeSet, 
   })
 
   private val cancelButton = returning(findById[View](R.id.cancel_button_container))(_.onClick {
-    if (slideControlState != Recording) {
+    if (!slideControlState.currentValue.contains(Recording)) {
       playbackControls.filter(_.isPlaying).foreach(_.stop())
       hide()
     }
