@@ -102,9 +102,7 @@ public class PendingConnectRequestManagerFragment extends BaseFragment<PendingCo
 
     @Override
     public void dismissSingleUserProfile() {
-        if (LayoutSpec.isPhone(getActivity()) &&
-            getChildFragmentManager().popBackStackImmediate()) {
-
+        if (getChildFragmentManager().popBackStackImmediate()) {
             restoreCurrentPageAfterClosingOverlay();
         }
     }

@@ -410,14 +410,6 @@ public class DrawingFragment extends BaseFragment<DrawingFragment.Container> imp
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
-        if (LayoutSpec.isTablet(getActivity())) {
-            ViewUtils.lockScreenOrientation(Configuration.ORIENTATION_PORTRAIT, getActivity());
-        }
-    }
-
-    @Override
     public void onStop() {
         getControllerFactory().getAccentColorController().removeAccentColorObserver(this);
         getControllerFactory().getGlobalLayoutController().removeKeyboardVisibilityObserver(this);
