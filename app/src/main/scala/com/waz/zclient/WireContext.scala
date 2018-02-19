@@ -23,6 +23,7 @@ import android.content.{Context, ContextWrapper, DialogInterface}
 import android.support.v4.app.{Fragment, FragmentActivity}
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.preference.Preference
+import android.view.View.OnClickListener
 import android.view.{LayoutInflater, View, ViewGroup, ViewStub}
 import com.waz.ZLog
 import com.waz.ZLog._
@@ -147,6 +148,16 @@ trait FragmentHelper extends Fragment with ViewFinder with Injectable with Event
   }
 
 
+  override def onResume() = {
+    super.onResume()
+    views.foreach(_.onResume())
+  }
+
+
+  override def onPause() = {
+    super.onPause()
+    views.foreach(_.onPause())
+  }
 
   override def onDestroyView() = {
     super.onDestroyView()
@@ -230,16 +241,31 @@ trait ActivityHelper extends AppCompatActivity with ViewFinder with Injectable w
 
 class ViewHolder[T <: View](id: Int, finder: ViewFinder) {
   var view = Option.empty[T]
+  private var onClickListener = Option.empty[OnClickListener]
 
   def get: T = view.getOrElse { returning(finder.findById[T](id)) { t => view = Some(t) } }
 
-  def clear() = view = Option.empty
+  def clear() =
+    view = Option.empty
 
   def foreach(f: T => Unit): Unit = Option(get).foreach(f)
 
   def map[A](f: T => A): Option[A] = Option(get).map(f)
 
   def flatMap[A](f: T => Option[A]): Option[A] = Option(get).flatMap(f)
+
+  def onResume() =
+    onClickListener.foreach(l => view.foreach(_.setOnClickListener(l)))
+
+  def onPause() = {
+    view.foreach(_.setOnClickListener(null))
+  }
+
+  def onClick(f: T => Unit): Unit = {
+    onClickListener = Some(returning(new OnClickListener {
+      override def onClick(v: View) = f(v.asInstanceOf[T])
+    })(l => view.foreach(_.setOnClickListener(l))))
+  }
 }
 
 trait PreferenceHelper extends Preference with Injectable with EventContext {

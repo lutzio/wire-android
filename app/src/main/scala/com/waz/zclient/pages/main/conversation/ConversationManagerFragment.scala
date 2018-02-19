@@ -324,9 +324,7 @@ class ConversationManagerFragment extends BaseFragment[Container] with FragmentH
   override def onAddPeopleToConversation(): Unit = {}
 
   override def onShowConversationMenu(inConvList: Boolean, convId: ConvId): Unit = {}
-
-  override def onShowCurrentOtrClient(): Unit = {}
-
+  
   override def onHideOtrClient(): Unit = {}
 
   override def showRemoveConfirmation(userId: UserId): Unit = {}

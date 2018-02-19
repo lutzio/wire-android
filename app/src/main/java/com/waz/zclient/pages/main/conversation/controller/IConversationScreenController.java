@@ -66,8 +66,6 @@ public interface IConversationScreenController {
 
     DialogLaunchMode getPopoverLaunchMode();
 
-    void showCurrentOtrClient();
-
     void hideOtrClient();
 
     void showLikesList(Message message);

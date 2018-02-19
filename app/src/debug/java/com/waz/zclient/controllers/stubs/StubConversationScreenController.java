@@ -19,7 +19,6 @@ package com.waz.zclient.controllers.stubs;
 
 import android.view.View;
 import com.waz.api.Message;
-import com.waz.api.OtrClient;
 import com.waz.api.User;
 import com.waz.model.ConvId;
 import com.waz.model.IntegrationId;
@@ -100,7 +99,6 @@ public class StubConversationScreenController implements IConversationScreenCont
 
     }
 
-
     @Override
     public DialogLaunchMode getPopoverLaunchMode() {
         return null;
@@ -128,11 +126,6 @@ public class StubConversationScreenController implements IConversationScreenCont
 
     @Override
     public void tearDown() {
-
-    }
-
-    @Override
-    public void showCurrentOtrClient() {
 
     }
 

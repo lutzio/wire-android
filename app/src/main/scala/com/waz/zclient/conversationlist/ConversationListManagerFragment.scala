@@ -459,8 +459,6 @@ class ConversationListManagerFragment extends Fragment
 
   override def onAddPeopleToConversation() = {}
 
-  override def onShowCurrentOtrClient() = {}
-
   override def onHideOtrClient() = {}
 
   override def onShowLikesList(message: Message) = {}

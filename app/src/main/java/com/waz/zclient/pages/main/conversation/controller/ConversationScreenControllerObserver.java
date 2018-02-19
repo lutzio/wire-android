@@ -40,8 +40,6 @@ public interface ConversationScreenControllerObserver {
 
     void onShowConversationMenu(boolean inConvList, ConvId convId);
 
-    void onShowCurrentOtrClient();
-
     void onHideOtrClient();
 
     void onShowLikesList(Message message);
