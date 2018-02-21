@@ -45,6 +45,7 @@ import com.waz.zclient.pages.main.conversation.controller.{ConversationScreenCon
 import com.waz.zclient.pages.main.pickuser.controller.IPickUserController
 import com.waz.zclient.participants.{OptionsMenuFragment, ParticipantsController}
 import com.waz.zclient.ui.animation.interpolators.penner.Expo
+import com.waz.zclient.ui.utils.KeyboardUtils
 import com.waz.zclient.usersearch.PickUserFragment
 import com.waz.zclient.utils.ContextUtils._
 import com.waz.zclient.utils.ViewUtils
@@ -245,51 +246,6 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
       )
       .addToBackStack(SingleOtrClientFragment.TAG)
       .commit
-
-  override def onShowUser(userId: UserId): Unit = participantsController.getUser(userId).foreach {
-    case Some(user) if user.connection == User.ConnectionStatus.ACCEPTED || userAccountsController.isTeamAccount && userAccountsController.isTeamMember(userId) =>
-      verbose(s"onShowUser($userId)")
-      participantsController.selectParticipant(userId)
-      openUserProfileFragment(SingleParticipantFragment.newInstance(SingleParticipantFragment.USER_PAGE), SingleParticipantFragment.TAG)
-      navigationController.setRightPage(Page.PARTICIPANT_USER_PROFILE, ParticipantFragment.TAG)
-
-    case Some(user) if user.connection == PENDING_FROM_OTHER || user.connection == PENDING_FROM_USER || user.connection == IGNORED =>
-      openUserProfileFragment(
-        PendingConnectRequestFragment.newInstance(userId.str, null, ConnectRequestLoadMode.LOAD_BY_USER_ID, IConnectStore.UserRequester.PARTICIPANTS),
-        PendingConnectRequestFragment.TAG
-      )
-      navigationController.setRightPage(Page.PARTICIPANT_USER_PROFILE, ParticipantFragment.TAG)
-
-    case Some(user) if user.connection == BLOCKED =>
-      openUserProfileFragment(
-        BlockedUserProfileFragment.newInstance(userId.str, IConnectStore.UserRequester.PARTICIPANTS),
-        BlockedUserProfileFragment.TAG
-      )
-      navigationController.setRightPage(Page.PARTICIPANT_USER_PROFILE, ParticipantFragment.TAG)
-
-    case Some(user) if user.connection == CANCELLED || user.connection == UNCONNECTED =>
-      openUserProfileFragment(
-        SendConnectRequestFragment.newInstance(userId.str, IConnectStore.UserRequester.PARTICIPANTS),
-        SendConnectRequestFragment.TAG
-      )
-      navigationController.setRightPage(Page.SEND_CONNECT_REQUEST, ParticipantFragment.TAG)
-
-    case _ =>
-  }
-
-  private def openUserProfileFragment(fragment: Fragment, tag: String) = {
-    val transaction = getChildFragmentManager.beginTransaction
-    // TODO: fix animations
-    /*if (
-      screenController.getPopoverLaunchMode != DialogLaunchMode.AVATAR &&
-      screenController.getPopoverLaunchMode != DialogLaunchMode.COMMON_USER
-    ) {
-      animateParticipantsWithConnectUserProfile(false)
-      transaction.setCustomAnimations(R.anim.open_profile, R.anim.close_profile, R.anim.open_profile, R.anim.close_profile)
-    }
-    else transaction.setCustomAnimations(R.anim.fade_in, R.anim.fade_out, R.anim.fade_in, R.anim.fade_out)*/
-    transaction.replace(R.id.fl__participant__container, fragment, tag).addToBackStack(tag).commit
-  }
 
   private def animateParticipantsWithConnectUserProfile(show: Boolean) = {
     val animator = participantsContainerView.animate

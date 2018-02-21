@@ -195,9 +195,7 @@ class ConversationManagerFragment extends BaseFragment[Container] with FragmentH
     navigationController.setRightPage(Page.MESSAGE_STREAM, ConversationManagerFragment.Tag)
     getChildFragmentManager.popBackStack(ParticipantFragment.TAG, FragmentManager.POP_BACK_STACK_INCLUSIVE)
   }
-
-  override def onShowUser(userId: UserId): Unit = KeyboardUtils.hideKeyboard(getActivity)
-
+  
   override def onShowLikesList(message: Message): Unit = showFragment(LikesListFragment.newInstance(message), LikesListFragment.TAG)
 
   override def onShowIntegrationDetails(providerId: ProviderId, integrationId: IntegrationId): Unit = {

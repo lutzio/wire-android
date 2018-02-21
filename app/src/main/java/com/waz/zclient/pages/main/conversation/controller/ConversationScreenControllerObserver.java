@@ -32,8 +32,6 @@ public interface ConversationScreenControllerObserver {
 
     void onShowEditConversationName(boolean show);
 
-    void onShowUser(UserId userId);
-
     void onHideUser();
 
     void onAddPeopleToConversation();

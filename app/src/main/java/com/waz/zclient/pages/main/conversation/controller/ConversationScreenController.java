@@ -132,9 +132,6 @@ public class ConversationScreenController implements IConversationScreenControll
             return false;
         }
         isShowingUser = true;
-        for (ConversationScreenControllerObserver observer : conversationScreenControllerObservers) {
-            observer.onShowUser(userId);
-        }
         return true;
     }
 

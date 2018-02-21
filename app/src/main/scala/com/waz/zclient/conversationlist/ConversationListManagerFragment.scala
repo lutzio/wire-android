@@ -453,8 +453,6 @@ class ConversationListManagerFragment extends Fragment
 
   override def onShowEditConversationName(show: Boolean) = {}
 
-  override def onShowUser(userId: UserId): Unit = {}
-
   override def onHideUser() = {}
 
   override def onAddPeopleToConversation() = {}

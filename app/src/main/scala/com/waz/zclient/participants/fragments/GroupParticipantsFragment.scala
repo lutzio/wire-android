@@ -21,24 +21,30 @@ package com.waz.zclient.participants.fragments
 import android.content.Context
 import android.os.Bundle
 import android.support.annotation.Nullable
+import android.support.v4.app.Fragment
 import android.support.v7.widget.{GridLayoutManager, RecyclerView}
 import android.view.animation.{AlphaAnimation, Animation}
 import android.view.{LayoutInflater, View, ViewGroup}
 import android.widget.LinearLayout
 import com.waz.ZLog.ImplicitTag._
+import com.waz.ZLog.verbose
 import com.waz.api.NetworkMode
+import com.waz.api.User.ConnectionStatus._
 import com.waz.model.{UserData, UserId}
 import com.waz.service.ZMessaging
 import com.waz.threading.Threading
 import com.waz.utils._
 import com.waz.utils.events._
 import com.waz.zclient.common.controllers.UserAccountsController
+import com.waz.zclient.core.stores.connect.IConnectStore
 import com.waz.zclient.core.stores.network.NetworkAction
 import com.waz.zclient.integrations.IntegrationDetailsController
 import com.waz.zclient.pages.BaseFragment
+import com.waz.zclient.pages.main.connect.{BlockedUserProfileFragment, ConnectRequestLoadMode, PendingConnectRequestFragment, SendConnectRequestFragment}
 import com.waz.zclient.pages.main.conversation.controller.IConversationScreenController
 import com.waz.zclient.pages.main.pickuser.controller.IPickUserController
 import com.waz.zclient.participants.{ParticipantsChatheadAdapter, ParticipantsController}
+import com.waz.zclient.ui.utils.KeyboardUtils
 import com.waz.zclient.utils.ContextUtils._
 import com.waz.zclient.utils.{UiStorage, UserSignal, ViewUtils}
 import com.waz.zclient.views.menus.{FooterMenu, FooterMenuCallback}
@@ -72,10 +78,51 @@ class GroupParticipantsFragment extends BaseFragment[GroupParticipantsFragment.C
               convScreenController.showIntegrationDetails(pId, iId)
             case _ =>
           }
-        case _ =>
-          if (convScreenController.showUser(user.id))
-            participantsController.selectParticipant(user.id)
+        case _ => showUser(user.id)
       }
+      case _ =>
+    }
+  }
+
+  private def showUser(userId: UserId): Unit = {
+    verbose(s"onShowUser($userId)")
+    convScreenController.showUser(userId)
+    participantsController.selectParticipant(userId)
+
+    def openUserProfileFragment(fragment: Fragment, tag: String) =
+      getFragmentManager.beginTransaction
+        .replace(R.id.fl__participant__container, fragment, tag)
+        .addToBackStack(tag)
+        .commit
+
+    KeyboardUtils.hideKeyboard(getActivity)
+    participantsController.getUser(userId).foreach {
+      case Some(user) if user.connection == ACCEPTED || userAccountsController.isTeamAccount && userAccountsController.isTeamMember(userId) =>
+        participantsController.selectParticipant(userId)
+        openUserProfileFragment(SingleParticipantFragment.newInstance(SingleParticipantFragment.USER_PAGE), SingleParticipantFragment.TAG)
+//        navigationController.setRightPage(Page.PARTICIPANT_USER_PROFILE, ParticipantFragment.TAG)
+
+      case Some(user) if user.connection == PENDING_FROM_OTHER || user.connection == PENDING_FROM_USER || user.connection == IGNORED =>
+        openUserProfileFragment(
+          PendingConnectRequestFragment.newInstance(userId.str, null, ConnectRequestLoadMode.LOAD_BY_USER_ID, IConnectStore.UserRequester.PARTICIPANTS),
+          PendingConnectRequestFragment.TAG
+        )
+//        navigationController.setRightPage(Page.PARTICIPANT_USER_PROFILE, ParticipantFragment.TAG)
+
+      case Some(user) if user.connection == BLOCKED =>
+        openUserProfileFragment(
+          BlockedUserProfileFragment.newInstance(userId.str, IConnectStore.UserRequester.PARTICIPANTS),
+          BlockedUserProfileFragment.TAG
+        )
+//        navigationController.setRightPage(Page.PARTICIPANT_USER_PROFILE, ParticipantFragment.TAG)
+
+      case Some(user) if user.connection == CANCELLED || user.connection == UNCONNECTED =>
+        openUserProfileFragment(
+          SendConnectRequestFragment.newInstance(userId.str, IConnectStore.UserRequester.PARTICIPANTS),
+          SendConnectRequestFragment.TAG
+        )
+//        navigationController.setRightPage(Page.SEND_CONNECT_REQUEST, ParticipantFragment.TAG)
+
       case _ =>
     }
   }
