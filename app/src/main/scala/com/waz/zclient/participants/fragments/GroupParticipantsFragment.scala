@@ -26,14 +26,13 @@ import android.view.animation.{AlphaAnimation, Animation}
 import android.view.{LayoutInflater, View, ViewGroup}
 import android.widget.LinearLayout
 import com.waz.ZLog.ImplicitTag._
-import com.waz.api.{NetworkMode, User}
+import com.waz.api.NetworkMode
 import com.waz.model.{UserData, UserId}
 import com.waz.service.ZMessaging
 import com.waz.threading.Threading
 import com.waz.utils._
 import com.waz.utils.events._
 import com.waz.zclient.common.controllers.UserAccountsController
-import com.waz.zclient.conversation.ConversationController
 import com.waz.zclient.core.stores.network.NetworkAction
 import com.waz.zclient.integrations.IntegrationDetailsController
 import com.waz.zclient.pages.BaseFragment
@@ -45,17 +44,15 @@ import com.waz.zclient.utils.{UiStorage, UserSignal, ViewUtils}
 import com.waz.zclient.views.menus.{FooterMenu, FooterMenuCallback}
 import com.waz.zclient.{FragmentHelper, R}
 
-class ParticipantsBodyFragment extends BaseFragment[ParticipantsBodyFragment.Container] with FragmentHelper {
+class GroupParticipantsFragment extends BaseFragment[GroupParticipantsFragment.Container] with FragmentHelper {
 
   implicit def ctx: Context = getActivity
   import Threading.Implicits.Ui
 
   private lazy val zms                          = inject[Signal[ZMessaging]]
-  private lazy val convController               = inject[ConversationController]
   private lazy val participantsController       = inject[ParticipantsController]
   private lazy val convScreenController         = inject[IConversationScreenController]
   private lazy val userAccountsController       = inject[UserAccountsController]
-  private lazy val pickUserController           = inject[IPickUserController]
   private lazy val integrationDetailsController = inject[IntegrationDetailsController]
 
   private lazy val participantsAdapter = returning(new ParticipantsChatheadAdapter(getInt(R.integer.participant_column__count))) { adapter =>
@@ -136,10 +133,6 @@ class ParticipantsBodyFragment extends BaseFragment[ParticipantsBodyFragment.Con
 
   }
 
-  private var participantStoreSub = Option.empty[Subscription]
-
-  private def getOldUserAPI(userId: UserId): User = getStoreFactory.pickUserStore.getUser(userId.str)
-
   override def onCreateAnimation(transit: Int, enter: Boolean, nextAnim: Int): Animation = {
     val parent = getParentFragment
     // Apply the workaround only if this is a child fragment, and the parent is being removed.
@@ -179,19 +172,13 @@ class ParticipantsBodyFragment extends BaseFragment[ParticipantsBodyFragment.Con
       fm.setCallback(footerMenuCallback)
     }
   }
-
-  override def onDestroyView() = {
-    participantStoreSub.foreach(_.destroy())
-    participantStoreSub = None
-    super.onDestroyView()
-  }
 }
 
-object ParticipantsBodyFragment {
-  val TAG: String = classOf[ParticipantsBodyFragment].getName
+object GroupParticipantsFragment {
+  val TAG: String = classOf[GroupParticipantsFragment].getName
 
-  def newInstance(): ParticipantsBodyFragment =
-    new ParticipantsBodyFragment
+  def newInstance(): GroupParticipantsFragment =
+    new GroupParticipantsFragment
 
   trait Container {
 

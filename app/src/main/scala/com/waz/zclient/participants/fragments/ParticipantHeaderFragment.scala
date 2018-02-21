@@ -141,7 +141,7 @@ class ParticipantHeaderFragment extends BaseFragment[ParticipantHeaderFragment.C
     }
   }
 
-  private lazy val shieldView = returning(view[ShieldView](R.id.sv__otr__verified_shield)) { view =>
+  private lazy val shieldView = returning(view[ShieldView](R.id.verified_shield)) { view =>
     (for {
       isGroupOrBot <- participantsController.isGroupOrBot
       user         <- if (isGroupOrBot) Signal.const(Option.empty[UserData])
@@ -223,21 +223,19 @@ class ParticipantHeaderFragment extends BaseFragment[ParticipantHeaderFragment.C
     super.onViewCreated(view, savedInstanceState)
 
     toolbar.foreach(_.setNavigationOnClickListener(new View.OnClickListener() {
-      override def onClick(v: View): Unit = {
-        editInProgress.head.foreach {
-          case true =>
-            renameConversation()
-            editInProgress ! false
-          case false =>
-            participantsController.otherParticipant.map(_.isDefined).head.foreach {
-              case true =>
-                convScreenController.hideUser()
-                participantsController.unselectParticipant()
-              case false =>
-                convScreenController.hideParticipants(true, false)
-                getActivity.onBackPressed()
-            }
-        }
+      override def onClick(v: View): Unit = editInProgress.head.foreach {
+        case true =>
+          renameConversation()
+          editInProgress ! false
+        case false =>
+          participantsController.otherParticipant.map(_.isDefined).head.foreach {
+            case true =>
+              convScreenController.hideUser()
+              participantsController.unselectParticipant()
+            case false =>
+              convScreenController.hideParticipants(true, false)
+              getActivity.onBackPressed()
+          }
       }
     }))
 

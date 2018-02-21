@@ -93,8 +93,7 @@ class ParticipantsController(implicit injector: Injector, context: Context, ec: 
   def withCurrentConvGroupOrBot(callback: Callback[java.lang.Boolean]): Unit =
     isGroupOrBot.head.foreach { groupOrBot => callback.callback(groupOrBot) }(Threading.Ui)
 
-
-  def showRemoveConfirmation(userId: UserId) = getUser(userId).foreach {
+  def showRemoveConfirmation(userId: UserId): Unit = getUser(userId).foreach {
     case Some(userData) =>
       val request = new ConfirmationRequest.Builder()
         .withHeader(getString(R.string.confirmation_menu__header))
@@ -115,6 +114,6 @@ class ParticipantsController(implicit injector: Injector, context: Context, ec: 
       confirmationController.requestConfirmation(request, IConfirmationController.PARTICIPANTS)
       inject[SoundController].playAlert()
     case _ =>
-  }
+  }(Threading.Ui)
 
 }

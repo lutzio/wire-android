@@ -63,7 +63,7 @@ import com.waz.zclient.pages.main.conversation.controller.{ConversationScreenCon
 import com.waz.zclient.pages.main.drawing.DrawingFragment
 import com.waz.zclient.pages.main.pickuser.controller.{IPickUserController, PickUserControllerScreenObserver}
 import com.waz.zclient.pages.main.profile.camera.{CameraContext, CameraFragment}
-import com.waz.zclient.participants.fragments.{ParticipantFragment, TabbedParticipantBodyFragment}
+import com.waz.zclient.participants.fragments.{ParticipantFragment, SingleParticipantFragment}
 import com.waz.zclient.ui.utils.KeyboardUtils
 import com.waz.zclient.views.{ConversationFragment, LoadingIndicatorView}
 import com.waz.zclient.{FragmentHelper, OnBackPressedListener, R}
@@ -187,7 +187,7 @@ class ConversationManagerFragment extends BaseFragment[Container] with FragmentH
     KeyboardUtils.hideKeyboard(getActivity)
     navigationController.setRightPage(Page.PARTICIPANT, ConversationManagerFragment.Tag)
 
-    val fragment = ParticipantFragment.newInstance(IConnectStore.UserRequester.PARTICIPANTS, if (showDeviceTabIfSingle) TabbedParticipantBodyFragment.DEVICE_PAGE else TabbedParticipantBodyFragment.USER_PAGE)
+    val fragment = ParticipantFragment.newInstance(IConnectStore.UserRequester.PARTICIPANTS, if (showDeviceTabIfSingle) SingleParticipantFragment.DEVICE_PAGE else SingleParticipantFragment.USER_PAGE)
     showFragment(fragment, ParticipantFragment.TAG)
   }
 
@@ -324,7 +324,7 @@ class ConversationManagerFragment extends BaseFragment[Container] with FragmentH
   override def onAddPeopleToConversation(): Unit = {}
 
   override def onShowConversationMenu(inConvList: Boolean, convId: ConvId): Unit = {}
-  
+
   override def onHideOtrClient(): Unit = {}
 
   override def showRemoveConfirmation(userId: UserId): Unit = {}

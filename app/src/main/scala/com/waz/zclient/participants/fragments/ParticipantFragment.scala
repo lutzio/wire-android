@@ -55,7 +55,7 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
   with ConversationScreenControllerObserver
   with OnBackPressedListener
   with ParticipantHeaderFragment.Container
-  with ParticipantsBodyFragment.Container
+  with GroupParticipantsFragment.Container
   with SendConnectRequestFragment.Container
   with BlockedUserProfileFragment.Container
   with PendingConnectRequestFragment.Container {
@@ -121,16 +121,16 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
           fragmentManager.beginTransaction
             .replace(
               R.id.fl__participant__container,
-              TabbedParticipantBodyFragment.newInstance(getArguments.getInt(ParticipantFragment.ARG__FIRST__PAGE)),
-              TabbedParticipantBodyFragment.TAG)
+              SingleParticipantFragment.newInstance(getArguments.getInt(ParticipantFragment.ARG__FIRST__PAGE)),
+              SingleParticipantFragment.TAG)
             .commit
         case _ =>
           participantsController.unselectParticipant()
 
           fragmentManager.beginTransaction
             .replace(R.id.fl__participant__container,
-              ParticipantsBodyFragment.newInstance(),
-              ParticipantsBodyFragment.TAG)
+              GroupParticipantsFragment.newInstance(),
+              GroupParticipantsFragment.TAG)
             .commit
       }
 
@@ -247,9 +247,10 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
       .commit
 
   override def onShowUser(userId: UserId): Unit = participantsController.getUser(userId).foreach {
-    case Some(user) if user.connection == User.ConnectionStatus.ACCEPTED || userAccountsController.isTeamAccount && userAccountsController.isTeamMember(userId)=>
+    case Some(user) if user.connection == User.ConnectionStatus.ACCEPTED || userAccountsController.isTeamAccount && userAccountsController.isTeamMember(userId) =>
+      verbose(s"onShowUser($userId)")
       participantsController.selectParticipant(userId)
-      openUserProfileFragment(SingleParticipantFragment.newInstance(), SingleParticipantFragment.Tag)
+      openUserProfileFragment(SingleParticipantFragment.newInstance(SingleParticipantFragment.USER_PAGE), SingleParticipantFragment.TAG)
       navigationController.setRightPage(Page.PARTICIPANT_USER_PROFILE, ParticipantFragment.TAG)
 
     case Some(user) if user.connection == PENDING_FROM_OTHER || user.connection == PENDING_FROM_USER || user.connection == IGNORED =>

@@ -155,13 +155,13 @@ trait FragmentHelper extends Fragment with ViewFinder with Injectable with Event
 
 
   override def onPause() = {
-    super.onPause()
     views.foreach(_.onPause())
+    super.onPause()
   }
 
   override def onDestroyView() = {
-    super.onDestroyView()
     views foreach(_.clear())
+    super.onDestroyView()
   }
 
   override def onStart(): Unit = {

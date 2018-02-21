@@ -18,132 +18,158 @@
 package com.waz.zclient.participants.fragments
 
 import android.content.Context
-import android.graphics.Color
 import android.os.Bundle
-import android.support.v7.widget.Toolbar
+import android.support.annotation.Nullable
+import android.support.v4.app.Fragment
+import android.support.v4.view.ViewPager
+import android.view.animation.{AlphaAnimation, Animation}
 import android.view.{LayoutInflater, View, ViewGroup}
-import android.widget.TextView
-import com.waz.ZLog.ImplicitTag.implicitLogTag
-import com.waz.api.Verification
-import com.waz.service.NetworkModeService
+import com.waz.ZLog.ImplicitTag._
+import com.waz.model.UserId
 import com.waz.threading.Threading
-import com.waz.utils.returning
-import com.waz.zclient.common.controllers.{ThemeController, UserAccountsController}
-import com.waz.zclient.common.views.{ChatheadView, UserDetailsView}
-import com.waz.zclient.controllers.navigation.{INavigationController, NavigationController}
+import com.waz.utils._
+import com.waz.zclient.common.controllers.{BrowserController, ThemeController, UserAccountsController}
 import com.waz.zclient.conversation.ConversationController
-import com.waz.zclient.messages.UsersController
+import com.waz.zclient.core.stores.conversation.ConversationChangeRequester
 import com.waz.zclient.pages.main.conversation.controller.IConversationScreenController
-import com.waz.zclient.pages.main.participants.ProfileAnimation
-import com.waz.zclient.pages.main.participants.dialog.DialogLaunchMode
-import com.waz.zclient.participants.ParticipantsController
-import com.waz.zclient.ui.animation.fragment.FadeAnimation
+import com.waz.zclient.participants.{ParticipantOtrDeviceAdapter, ParticipantsController, TabbedParticipantPagerAdapter}
+import com.waz.zclient.ui.views.tab.TabIndicatorLayout
 import com.waz.zclient.utils.ContextUtils._
-import com.waz.zclient.utils.RichView
-import com.waz.zclient.views.e2ee.ShieldView
-import com.waz.zclient.{FragmentHelper, R}
-
-import scala.concurrent.Future
+import com.waz.zclient.utils.ViewUtils
+import com.waz.zclient.views.menus.FooterMenuCallback
+import com.waz.zclient.{BaseActivity, FragmentHelper, R}
 
 class SingleParticipantFragment extends FragmentHelper {
+  import Threading.Implicits.Ui
+  implicit def ctx: Context = getActivity
 
-  implicit def cxt: Context = getActivity
+  private lazy val participantOtrDeviceAdapter = new ParticipantOtrDeviceAdapter
 
-  lazy val themeController        = inject[ThemeController]
-  lazy val participantsController = inject[ParticipantsController]
-  lazy val usersController        = inject[UsersController]
-  lazy val userAccountsController = inject[UserAccountsController]
-  lazy val convController         = inject[ConversationController]
-  lazy val networkService         = inject[NetworkModeService]
+  private var viewPager = Option.empty[ViewPager]
 
-  lazy val screenController = inject[IConversationScreenController]
-  lazy val navController    = inject[INavigationController]
+  private lazy val convController         = inject[ConversationController]
+  private lazy val participantsController = inject[ParticipantsController]
+  private lazy val themeController        = inject[ThemeController]
+  private lazy val screenController       = inject[IConversationScreenController]
+  private lazy val userAccountsController = inject[UserAccountsController]
+  private lazy val browserController      = inject[BrowserController]
 
-  lazy val selUserId = participantsController.otherParticipant.collect { case Some(u) => u }
+  private lazy val callback = new FooterMenuCallback {
 
-  lazy val selUser   = selUserId.flatMap(usersController.user)
-  lazy val shieldView = returning(view[ShieldView](R.id.verified_shield)) { vh =>
-    selUser.map(_.verified == Verification.VERIFIED).onUi(vis => vh.foreach(_.setVisible(vis)))
-  }
-
-  lazy val header = returning(view[TextView](R.id.toolbar__title)) { vh =>
-    selUser.map(_.name).onUi(n => vh.foreach(_.setText(n)))
-  }
-
-  lazy val userDetails = returning(view[UserDetailsView](R.id.user_details)) { vh =>
-    selUserId(u => vh.foreach(_.setUserId(u)))
-  }
-
-  lazy val chathead = returning(view[ChatheadView](R.id.chathead)) { vh =>
-    selUserId(u => vh.foreach(_.setUserId(u)))
-  }
-
-  private var goToConversationWithUser = false
-
-
-  override def onCreateView(inflater: LayoutInflater, container: ViewGroup, savedInstanceState: Bundle) =
-    inflater.inflate(R.layout.fragment_participants_single, container, false)
-
-  override def onViewCreated(view: View, savedInstanceState: Bundle) = {
-    returning(findById[Toolbar](R.id.toolbar)) { t =>
-      t.setNavigationIcon(if (themeController.isDarkTheme) R.drawable.action_back_light else R.drawable.action_back_dark)
-      t.setNavigationOnClickListener(new View.OnClickListener() {
-        override def onClick(v: View) =
-          screenController.hideUser()
-      })
-    }
-
-    getChildFragmentManager.beginTransaction
-      .add(
-        R.id.tab__container,
-        TabbedParticipantBodyFragment.newInstance(TabbedParticipantBodyFragment.USER_PAGE),
-        TabbedParticipantBodyFragment.TAG)
-      .commit
-
-    // Posting so that we can get height after onMeasure has been called
-    // TODO seems dodgy...
-    Future {
-      val height = findById[View](R.id.header_container).getHeight
-      findById[View](R.id.tab__container).setPadding(0, height, 0, 0)
-    } (Threading.Ui)
-
-    returning(findById[View](R.id.background_container)) { bc =>
-      if (navController.getPagerPosition == NavigationController.FIRST_PAGE ||
-          screenController.getPopoverLaunchMode == DialogLaunchMode.AVATAR ||
-          screenController.getPopoverLaunchMode == DialogLaunchMode.COMMON_USER)
-        bc.setClickable(true)
-      else bc.setBackgroundColor(Color.TRANSPARENT)
-    }
-
-    shieldView
-    header
-    userDetails
-    chathead
-  }
-
-  override def onCreateAnimation(transit: Int, enter: Boolean, nextAnim: Int) = {
-    if ((screenController.getPopoverLaunchMode != DialogLaunchMode.AVATAR) &&
-      (screenController.getPopoverLaunchMode != DialogLaunchMode.COMMON_USER)) {
-      val centerX = getOrientationIndependentDisplayWidth / 2
-      val centerY = getOrientationIndependentDisplayHeight / 2
-
-      // Fade out animation when starting conversation directly with this user
-      if (goToConversationWithUser && !enter) {
-        goToConversationWithUser = false
-        new FadeAnimation(getInt(R.integer.framework_animation_duration_medium), 1, 0)
-      } else {
-        val duration = getInt(if (enter) R.integer.open_profile__animation_duration else R.integer.close_profile__animation_duration)
-        val delay = if (enter) getInt(R.integer.open_profile__delay) else 0
-        new ProfileAnimation(enter, duration, delay, centerX, centerY)
+    override def onLeftActionClicked(): Unit =
+      participantsController.isGroup.head.foreach {
+        case false if userAccountsController.hasCreateConversationPermission =>
+          screenController.addPeopleToConversation()
+        case _ =>
+          screenController.hideParticipants(true, false)
+          participantsController.otherParticipant.head.foreach {
+            case Some(userId) =>
+              userAccountsController.createAndOpenConversation(
+                Array[UserId](userId),
+                ConversationChangeRequester.START_CONVERSATION,
+                getActivity.asInstanceOf[BaseActivity]
+              )
+            case _ =>
+          }
       }
-    } else super.onCreateAnimation(transit, enter, nextAnim)
+    override def onRightActionClicked(): Unit = (for {
+      isGroup <- participantsController.isGroup.head
+      convId  <- convController.currentConvId.head
+    } yield (isGroup, convId)).foreach {
+      case (false, convId) => screenController.showConversationMenu(false, convId)
+      case (true, convId) if userAccountsController.hasRemoveConversationMemberPermission(convId) =>
+        participantsController.otherParticipant.head.foreach {
+          case Some(userId) => participantsController.showRemoveConfirmation(userId)
+          case _            =>
+        }
+      case _ =>
+    }
   }
+
+  // This is a workaround for the bug where child fragments disappear when
+  // the parent is removed (as all children are first removed from the parent)
+  // See https://code.google.com/p/android/issues/detail?id=55228
+  // Apply the workaround only if this is a child fragment, and the parent is being removed.
+  override def onCreateAnimation(transit: Int, enter: Boolean, nextAnim: Int): Animation =
+    Option(getParentFragment) match {
+      case Some(parent: Fragment) if enter && parent.isRemoving => returning(new AlphaAnimation(1, 1)){
+        _.setDuration(ViewUtils.getNextAnimationDuration(parent))
+      }
+      case _ => super.onCreateAnimation(transit, enter, nextAnim)
+    }
+
+  override def onCreateView(inflater: LayoutInflater, viewGroup: ViewGroup, savedInstanceState: Bundle): View =
+    returning(inflater.inflate(R.layout.fragment_participants_single_tabbed, viewGroup, false)) { v =>
+      viewPager = Option(returning(findById[ViewPager](v, R.id.vp_single_participant_viewpager)) { pager =>
+        pager.setAdapter(new TabbedParticipantPagerAdapter(participantOtrDeviceAdapter, callback))
+
+        val tabIndicatorLayout = findById[TabIndicatorLayout](v, R.id.til_single_participant_tabs)
+        tabIndicatorLayout.setPrimaryColor(getColorWithTheme(
+          if (themeController.isDarkTheme) R.color.text__secondary_dark else R.color.text__secondary_light,
+          getContext
+        ))
+
+        tabIndicatorLayout.setViewPager(pager)
+      })
+
+    }
+
+  override def onViewCreated(v: View, @Nullable savedInstanceState: Bundle): Unit = {
+    super.onViewCreated(v, savedInstanceState)
+
+    if (Option(savedInstanceState).isEmpty) viewPager.foreach { pager =>
+      if (screenController.shouldShowDevicesTab) {
+        pager.setCurrentItem(1)
+        screenController.setShowDevicesTab(null)
+      } else
+        pager.setCurrentItem(getArguments.getInt(SingleParticipantFragment.ARG__FIRST__PAGE))
+    }
+
+    participantOtrDeviceAdapter.onClientClick.onUi { client =>
+      participantsController.otherParticipant.head.foreach {
+        case Some(userId) =>
+          Option(getParentFragment).foreach {
+            case f: ParticipantFragment => f.showOtrClient(userId, client.id)
+            case _ =>
+          }
+        case _ =>
+      }
+    }
+
+    participantOtrDeviceAdapter.onHeaderClick {
+      _ => browserController.openUrl(getString(R.string.url_otr_learn_why))
+    }
+
+    participantsController.showParticipantsRequest.onUi {
+      case (view, showDeviceTabIfSingle) => viewPager.foreach { pager =>
+        if (screenController.shouldShowDevicesTab) {
+          pager.setCurrentItem(1)
+          screenController.setShowDevicesTab(null)
+        } else participantsController.isGroup.head.foreach { isGroup =>
+          if (!isGroup && showDeviceTabIfSingle) pager.setCurrentItem(1)
+        }
+      }
+    }
+
+  }
+
+  override def onDestroyView(): Unit = {
+    viewPager = None
+    super.onDestroyView()
+  }
+
 }
 
 object SingleParticipantFragment {
+  val TAG: String = classOf[SingleParticipantFragment].getName
+  private val ARG__FIRST__PAGE: String = "ARG__FIRST__PAGE"
+  val USER_PAGE: Int = 0
+  val DEVICE_PAGE: Int = 1
 
-  val Tag = implicitLogTag
-
-  def newInstance(): SingleParticipantFragment =
-    new SingleParticipantFragment
+  def newInstance(firstPage: Int): SingleParticipantFragment =
+    returning(new SingleParticipantFragment){
+      _.setArguments(returning(new Bundle){
+        _.putInt(ARG__FIRST__PAGE, firstPage)
+      })
+    }
 }

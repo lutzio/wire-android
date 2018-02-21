@@ -38,7 +38,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @RunWith(AndroidJUnit4.class)
-public class  ParticipantHeaderFragmentTest extends FragmentTest<MainTestActivity>  {
+public class ParticipantHeaderFragmentTest extends FragmentTest<MainTestActivity>  {
     public ParticipantHeaderFragmentTest() {
         super(MainTestActivity.class);
     }
