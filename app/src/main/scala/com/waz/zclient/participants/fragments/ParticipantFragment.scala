@@ -56,7 +56,7 @@ import com.waz.zclient.{FragmentHelper, OnBackPressedListener, R}
 class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] with FragmentHelper
   with ConversationScreenControllerObserver
   with OnBackPressedListener
-  with ParticipantsHeaderFragment.Container
+  with ParticipantHeaderFragment.Container
   with ParticipantsBodyFragment.Container
   with TabbedParticipantBodyFragment.Container
   with SingleParticipantFragment.Container
@@ -116,8 +116,8 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
       fragmentManager.beginTransaction
         .replace(
           R.id.fl__participant__header__container,
-          ParticipantsHeaderFragment.newInstance,
-          ParticipantsHeaderFragment.TAG
+          ParticipantHeaderFragment.newInstance,
+          ParticipantHeaderFragment.TAG
         )
         .commit
 
@@ -193,29 +193,38 @@ class ParticipantFragment extends BaseFragment[ParticipantFragment.Container] wi
   }
 
   override def onBackPressed: Boolean = withBackstackHead {
-    case Some(f: PickUserFragment) if f.onBackPressed() => true
+    case Some(f: PickUserFragment) if f.onBackPressed() =>
+      verbose(s"onBackPressed with PickUserFragment")
+      true
     case Some(f: SingleOtrClientFragment) =>
+      verbose(s"onBackPressed with SingleOtrClientFragment")
       screenController.hideOtrClient()
       true
     case Some(f: SingleParticipantFragment) if f.onBackPressed() =>
-      verbose(s"PF single participant user on back pressed")
+      verbose(s"onBackPressed with SingleParticipantFragment")
       true
-    case Some(f: OptionsMenuFragment) if f.close() => true
+    case Some(f: OptionsMenuFragment) if f.close() =>
+      verbose(s"onBackPressed with OptionsMenuFragment")
+      true
     case _ if pickUserController.isShowingPickUser(getCurrentPickerDestination) =>
+      verbose(s"onBackPressed with isShowingPickUser")
       pickUserController.hidePickUser(getCurrentPickerDestination)
       true
     case _ if screenController.isShowingUser =>
+      verbose(s"onBackPressed with screenController.isShowingUser")
       screenController.hideUser()
       true
     case _ if screenController.isShowingParticipant =>
+      verbose(s"onBackPressed with isShowingParticipant")
       screenController.hideParticipants(true, false)
       true
-    case _ => false
+    case _ =>
+      verbose(s"onBackPressed with unknown")
+      false
   }
 
   override def onShowEditConversationName(show: Boolean): Unit =
     bodyContainer.foreach { view =>
-      verbose(s"PF onShowEditConversationName($show)")
       if (show) ViewUtils.fadeOutView(view)
       else ViewUtils.fadeInView(view)
     }
